@@ -1,0 +1,12 @@
+services:
+  db:
+    image: mariadb:10.11
+    environment:
+      - TZ=Asia/Taipei
+      - MARIADB_DATABASE=ai_advisor
+      - MARIADB_USER=admin
+      - MARIADB_PASSWORD=1qaz@WSX
+      - MARIADB_ROOT_PASSWORD=root_1qaz@WSX
+    ports: ["3307:3306"]
+    volumes: [ "dbdata:/var/lib/mysql", "./init.sql:/docker-entrypoint-initdb.d/0_init.sql" ]
+volumes: { dbdata: {} }

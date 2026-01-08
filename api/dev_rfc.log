@@ -1,0 +1,61 @@
+
+**** Log file opened at 2025-09-15 14:56:42.087305 UTC+08:00 (台北標準時間), Encoding UTF-8
+NW RFC Library: Kernel variant, Release 750 Patch Level 9, Compiled on Jan 19 2022 05:10:42
+ CPIC library: 753.2021.05.10 version 3, NI library: 40, Kernel Release: 753 Patch Level 919
+ Current working directory: C:\ai-advisor\api, Program: python
+ Hardware: PC with Windows NT 8x AMD64 Level 6 (Mod 140 Step 1), Operating_system: Windows NT 10.0
+ Hostname: NB340-WILLCHENG, IP address: 172.23.0.141, IPv6 address: fe80::8f9e:d002:1254:2a2c
+
+2025-09-15 14:56:42.087614 [22412] >> Info entry
+	Did not find config file C:\ai-advisor\api\sapnwrfc.ini.
+
+**** Log file opened at 2025-09-15 16:24:35.481167 UTC+08:00 (台北標準時間), Encoding UTF-8
+NW RFC Library: SDK variant, Release 750 Patch Level 17
+Compilation date          : May 24 2025 01:13:24
+CPIC library              : 754.2025.04.15 version 3
+NI library                : 40
+Kernel Release            : 754 Patch Level 524
+Current working directory : C:\ai-advisor\api
+Program                   : python
+Process ID                : 17016
+User                      : will.cheng
+Hardware                  : PC with Windows NT 8x AMD64 Level 6 (Mod 140 Step 1)
+Binary Type               : 64bit
+Operating_system          : Windows NT 10.0
+Hostname                  : NB340-WILLCHENG
+IP address                : 172.23.0.141
+IPv6 address              : fe80::134b:7c7:7e61:e6e3
+NI IPv6 status            : inactive
+Global trace level        : 0
+
+2025-09-15 16:24:35.480577 [11312] >> Info entry
+	throwRfcErrorMsg called at:
+	0x7FFFAA75AC70: sapnwrfc.dll!RfcSetAbapObjectByIndex(Error in SymSetContext(): 50)
+	0x7FFFAA75AC70: sapnwrfc.dll!RfcSetAbapObjectByIndex(Error in SymSetContext(): 50)
+	0x7FFFAA75AC70: sapnwrfc.dll!RfcSetAbapObjectByIndex(Error in SymSetContext(): 50)
+	0x7FFFAA75AC70: sapnwrfc.dll!RfcSetAbapObjectByIndex(Error in SymSetContext(): 50)
+	0x7FFFAA75AC70: sapnwrfc.dll!RfcSetAbapObjectByIndex(Error in SymSetContext(): 50)
+	0x7FFFAA75AC70: sapnwrfc.dll!RfcSetAbapObjectByIndex(Error in SymSetContext(): 50)
+	0x7FFFAA71C250: sapnwrfc.dll!RfcInvoke(Error in SymSetContext(): 50)
+??????	0x7FFFB3FFBB50: python311.dll!PyObject_Vectorcall(Error in SymSetContext(): 50)
+	0x7FFFB3FFCC20: python311.dll!PyEval_EvalFrameDefault(Error in SymSetContext(): 50)
+	0x7FFFB3FFACC0: python311.dll!PyFunction_Vectorcall(Error in SymSetContext(): 50)
+	0x7FFFB40A5018: python311.dll!PyObject_Call(Error in SymSetContext(): 50)
+	0x7FFFB40D5508: python311.dll!PyNumber_InPlaceAdd(Error in SymSetContext(): 50)
+	0x7FFFB3FF8060: python311.dll!PyObject_MakeTpCall(Error in SymSetContext(): 50)
+	0x7FFFB4053748: python311.dll!PyTraceBack_Print_Indented(Error in SymSetContext(): 50)
+	0x7FFFB41FBBA4: python311.dll!PyContext_NewHamtForTests(Error in SymSetContext(): 50)
+	0x7FFFB41FBBA4: python311.dll!PyContext_NewHamtForTests(Error in SymSetContext(): 50)
+	0x7FFFB403D208: python311.dll!PyArg_UnpackTuple(Error in SymSetContext(): 50)
+	0x7FFFB40A5018: python311.dll!PyObject_Call(Error in SymSetContext(): 50)
+	0x7FFFB40A48EC: python311.dll!PyObject_CallObject(Error in SymSetContext(): 50)
+	0x7FFFB3FFCC20: python311.dll!PyEval_EvalFrameDefault(Error in SymSetContext(): 50)
+	0x7FFFB3FFACC0: python311.dll!PyFunction_Vectorcall(Error in SymSetContext(): 50)
+	0x7FFFB4043DC4: python311.dll!PyIter_Send(Error in SymSetContext(): 50)
+	0x7FFFB40A5018: python311.dll!PyObject_Call(Error in SymSetContext(): 50)
+	0x7FFFB40626EC: python311.dll!PyInterpreterState_Delete(Error in SymSetContext(): 50)
+	0x7FFFB40626EC: python311.dll!PyInterpreterState_Delete(Error in SymSetContext(): 50)
+	0x7FF85BA63660: ucrtbase.dll!wcsrchr(Error in SymSetContext(): 50)
+	0x7FF85D2FE8C0: KERNEL32.DLL!BaseThreadInitThunk(Error in SymSetContext(): 50)
+	0x7FF85DDE8D70: ntdll.dll!RtlUserThreadStart(Error in SymSetContext(): 50)
+
