@@ -11,7 +11,7 @@ const me: User | null = JSON.parse(localStorage.getItem('aiadvisor_user') || 'nu
 
 /** 路由、環境變數 */
 const router = useRouter()
-const API_BASE: string = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
+const API_BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000')
 
 /** 狀態 */
 const loading = ref(false)

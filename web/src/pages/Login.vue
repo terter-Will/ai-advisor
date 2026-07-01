@@ -12,7 +12,7 @@ const showPwd  = ref(false);
 const loading  = ref(false);
 const errorMsg = ref('');
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000')
 
 async function submit() {
   errorMsg.value = ''

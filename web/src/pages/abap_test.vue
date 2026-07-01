@@ -16,7 +16,7 @@ function getCurrentUser() {
 const me = getCurrentUser()
 
 const router = useRouter()
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
+const API_BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000')
 function backHome(){ router.replace('/user') }
 
 /** 功能頁：掛上全域離開提醒 */

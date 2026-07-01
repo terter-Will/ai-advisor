@@ -4,8 +4,8 @@ import nttLogo from '../assets/GlobalLogo_NTTDATA_White.png'
 import homeIcon from '../assets/Icon_Home.png'
 import { useRouter } from 'vue-router'
 import { onMounted } from 'vue'
-import { startBilling, useAutoStopBilling } from '../composables/featureBilling'
-import {useLeaveConfirm} from '../composables/useLeaveConfirm'
+import { startBilling, useAutoStopBilling } from '../composables/featureBilling.ts'
+import {useLeaveConfirm} from '../composables/useLeaveConfirm.ts'
 
 /** 統一取得目前登入者 */
 function getCurrentUser() {
@@ -16,7 +16,7 @@ function getCurrentUser() {
 const me = getCurrentUser()
 
 const router = useRouter()
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
+const API_BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000')
 function backHome(){ router.replace('/user') }
 
 /** 功能頁：掛上全域離開提醒 */
