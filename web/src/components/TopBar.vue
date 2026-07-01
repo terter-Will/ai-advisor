@@ -55,7 +55,7 @@ const displayBalance = computed(() => balance.value ?? props.user?.points_balanc
 
 <template>
   <header class="topbar">
-    <div class="left"><strong>AI Advisor</strong></div>
+    <div class="left"><strong>NTTDATA Taiwan - AI Advisor</strong></div>
     <div class="right">
       <span v-if="featureBillingState.running" title="功能計時中">
       ｜⏱ {{ formattedTime }}（每分扣 {{ featureBillingState.perMinute }} 點）｜

@@ -8,6 +8,8 @@ import bg from '../assets/Menu.jpg'          // ← 圖1（背景）
 import securityIcon from '../assets/security_scan.png'  // ← 圖2（資安漏洞檢測）
 import performanceIcon from '../assets/Performance.png'// ← 圖3（系統效能檢測）
 import abapIcon from '../assets/ABAP_test.png'// ← 圖4（客製程式效能檢測）
+import ppIcon from '../assets/Icon_pp.png'
+import llmIcon from '../assets/Icon_llm.png'
 
 const router = useRouter()
 const me: User | null = JSON.parse(localStorage.getItem('aiadvisor_user') || 'null')
@@ -16,13 +18,14 @@ const me: User | null = JSON.parse(localStorage.getItem('aiadvisor_user') || 'nu
 function goSecurity()   { router.push('/user/security-scan') }
 function goPerformance() { router.push('/user/performance') }
 function goABAP() { router.push('/user/abap-test') }
+function goPP() { router.push('/user/purchase-predict') }
+function goLLM() { window.open('http://172.16.188.175:3000/', '_blank') }
 </script>
 
 <template>
   <div class="user" :style="{ '--bg': `url(${bg})` }">
     <TopBar :user="me" />
 
-    <!-- 右側功能 Dock -->
     <aside class="dock">
       <button class="tile" @click="goSecurity">
         <img :src="securityIcon" alt="" />
@@ -37,6 +40,16 @@ function goABAP() { router.push('/user/abap-test') }
       <button class="tile" @click="goABAP">
         <img :src="abapIcon" alt="" />
         <div class="title">SAP 客製程式效能檢測</div>
+      </button>
+
+      <button class="tile" @click="goPP">
+        <img :src="ppIcon" alt="" />
+        <div class="title">銷售預測</div>
+      </button>
+
+      <button class="tile" @click="goLLM">
+        <img :src="llmIcon" alt="" />
+        <div class="title">AI Advisor</div>
       </button>
     </aside>
   </div>
@@ -59,16 +72,24 @@ function goABAP() { router.push('/user/abap-test') }
 
 /* 把圖傳進來（可用 CSS 變數或直接寫 URL） */
 .user{ --bg: url('../assets/ai_admin_bg.jpg'); }
-/* 右側 Dock：放在背景右側黑色區 */
+
+/* 右側 Dock：設定固定高度並平均分配剩餘空間 */
 .dock{
-  position:absolute; right:144px; top:50%; transform:translateY(-50%);
-  display:grid; gap:84px;
-  width: 400px;               /* 卡片寬度 */
-  z-index:2;
+  position: absolute; 
+  right: 144px; 
+  top: 50%; 
+  transform: translateY(-50%);
+  display: flex; 
+  flex-direction: column;
+  justify-content: space-evenly;  /* ★ 核心修改：讓這 5 塊均分垂直空間 */
+  width: 350px; 
+  height: calc(100vh - 120px);    /* ★ 核心修改：指定佔據螢幕高度，扣掉 TopBar 留白 */
+  z-index: 2;
 }
+
 .tile{
   display:grid; grid-template-columns: 88px 1fr; align-items:center; gap:18px;
-  padding:18px 20px; border-radius:18px; border:1px solid rgba(255,255,255,.15);
+  padding:4px 8px; border-radius:18px; border:1px solid rgba(255,255,255,.15);
   background: rgba(10,16,28,.55); backdrop-filter: blur(8px);
   color:#fff; text-align:left; cursor:pointer;
   box-shadow: 0 12px 30px rgba(0,0,0,.35);

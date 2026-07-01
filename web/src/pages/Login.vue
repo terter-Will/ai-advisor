@@ -46,12 +46,12 @@ async function submit() {
     <img class="brand" :src="nttLogo" alt="NTT DATA" />
     <section class="card">
         <div class="mark" aria-label="AI Advisor">
-            <svg viewBox="0 0 600 120" class="mark-svg" role="img">
+            <svg viewBox="0 0 800 120" class="mark-svg" role="img">
                 <!-- 文字水平置中：x=50% + text-anchor=middle -->
                 <text x="50%" y="85" text-anchor="middle"
-                    font-size="72" font-weight="700" font-family="Arial"
+                    font-size="50" font-weight="700" font-family="Arial"
                     fill="#ffffff" filter="url(#glow)" letter-spacing="2">
-                AI&nbsp;Advisor
+                NTTDATA Taiwan - AI Advisor
                 </text>
             </svg>
         </div>

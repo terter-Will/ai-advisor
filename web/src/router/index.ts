@@ -9,6 +9,7 @@ const AccountSetting= () => import('../pages/account_setting.vue')
 const SecurityScan  = () => import('../pages/security_scan.vue')
 const Performance   = () => import('../pages/performance.vue')
 const ABAPTesting   = () => import('../pages/abap_test.vue')
+const PurchasePredict   = () => import('../pages/purchase_predict.vue')
 
 // 你專案裡 localStorage 放的是這個 key
 const LS_KEY = 'aiadvisor_user'
@@ -37,6 +38,9 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, roles: ['user'] } },
 
   { path: '/user/abap-test', name: 'ABAPTesting', component: ABAPTesting,
+    meta: { requiresAuth: true, roles: ['user'] } },
+    
+  { path: '/user/purchase-predict', name: 'PurchasePredict', component: PurchasePredict,
     meta: { requiresAuth: true, roles: ['user'] } },
 
   // Admin 首頁
