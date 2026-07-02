@@ -6,7 +6,7 @@ import pymysql, os
 from typing import Optional, Literal
 
 # ==================== env & CORS ====================
-load_dotenv()
+load_dotenv(encoding='utf-8-sig')
 allowed = os.getenv("ALLOW_ORIGINS", "http://localhost:5173, http://127.0.0.1:5173")
 allow_list = [o.strip() for o in allowed.split(",") if o.strip()]
 

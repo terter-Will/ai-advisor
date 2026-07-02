@@ -16,6 +16,7 @@ dist-ssr
 __pycache__/
 node_modules/
 dist/
+web/dist/
 api/.env
 
 # Editor directories and files

@@ -40,7 +40,7 @@ INSERT IGNORE INTO USRINFO
    sapconn, sapaddr, sapins, sapid, sapclnt, saprouter, sapusr, sappw,
    points_balance, points_updated_at)
 VALUES
-  ('test_user','user123','user',
+  ('will.cheng','1qaz@WSX','user',
    'PRD-ACME','10.0.0.1','00','PRD','100','', 'TECH_AI','secret123',
    5, NOW());
 
