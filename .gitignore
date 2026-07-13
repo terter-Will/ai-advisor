@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+api/.venv/
+api/.venv311/
+api/.env
+api/dev_rfc.log
+
+# Node
+node_modules/
+dist/
+web/dist/
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
