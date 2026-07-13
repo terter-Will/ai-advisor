@@ -1,6 +1,7 @@
 services:
   db:
     image: mariadb:10.11
+    restart: unless-stopped
     environment:
       - TZ=Asia/Taipei
       - MARIADB_DATABASE=ai_advisor
