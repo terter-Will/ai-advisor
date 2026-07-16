@@ -40,5 +40,5 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
           source: "web/dist/*"
-          target: "/var/www/aiadvisor"
-          strip_components: 2 # 確保 dist 裡面的檔案直接放到 /var/www/aiadvisor_web/ 底下
+          target: "/var/www/aiadvisor/dist"
+          strip_components: 2 # 確保 dist 裡面的檔案直接放到 /var/www/aiadvisor/dist/ 底下（對齊 nginx root 設定）
