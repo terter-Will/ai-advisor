@@ -7,34 +7,6 @@ import { useRouter } from 'vue-router'
 import bg from '../assets/Menu.jpg'          // ← 圖1（背景）
 import pointsIcon from '../assets/Icon_Setup.png'  // ← 圖2（點數設定/查詢）
 import accountIcon from '../assets/Icon_UserAdmin.png'// ← 圖3（使用者帳號維護）
-// === 全域離開提醒（路由守衛 + beforeunload）===
-// 貼在 <script setup lang="ts"> 區塊的最後面；不影響原有功能。
-// 說明：任何時候離開此頁（換路由、上一頁、重新整理、關頁），都會跳出確認。
-
-import { ref as __ref, onMounted as __onMounted, onBeforeUnmount as __onBeforeUnmount } from 'vue'
-import { onBeforeRouteLeave as __onBeforeRouteLeave } from 'vue-router'
-
-// 可動態開關（預設啟用全域提醒）。若某段流程想暫時關閉：__confirmOnLeave.value = false
-const __confirmOnLeave = __ref(true)
-
-const __LEAVE_MESSAGE = '離開此頁可能導致操作中斷或資料未保存。確定要離開嗎？'
-
-// SPA 重新整理 / 關頁 提醒（瀏覽器原生提示，文字不可自訂）
-function __beforeUnload(e: BeforeUnloadEvent) {
-  if (!__confirmOnLeave.value) return
-  e.preventDefault()
-  e.returnValue = '' // 設置任意字串可觸發提示（實際顯示內容由瀏覽器決定）
-}
-__onMounted(() => window.addEventListener('beforeunload', __beforeUnload))
-__onBeforeUnmount(() => window.removeEventListener('beforeunload', __beforeUnload))
-
-// 路由切換（包含按「上一頁」、跳其他頁）提示
-__onBeforeRouteLeave((_to, _from, next) => {
-  if (!__confirmOnLeave.value) return next()
-  const ok = window.confirm(__LEAVE_MESSAGE)
-  if (!ok) return next(false)
-  next()
-})
 
 const router = useRouter()
 const me: User | null = JSON.parse(localStorage.getItem('aiadvisor_user') || 'null')

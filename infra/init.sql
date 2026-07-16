@@ -101,7 +101,23 @@ CREATE TABLE IF NOT EXISTS ZCVERS (
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 5) 初始化點數記帳（把有初始點數的 user 記一筆 CREDIT）
+-- 5) 資安檢測結果
+CREATE TABLE IF NOT EXISTS security_scans (
+  id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id        BIGINT NOT NULL,
+  batch_id       CHAR(36) NOT NULL,
+  summary        TEXT NULL,
+  findings       JSON NULL,
+  source_snapshot LONGTEXT NULL,
+  model_used     VARCHAR(100) NULL,
+  created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX ix_scan_user_time (user_id, created_at),
+  CONSTRAINT fk_scan_user FOREIGN KEY (user_id)
+    REFERENCES USRINFO(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 6) 初始化點數記帳（把有初始點數的 user 記一筆 CREDIT）
 INSERT INTO points_ledger (user_id, kind, amount, balance_after, note)
 SELECT id, 'CREDIT', points_balance, points_balance, 'initial grant'
 FROM USRINFO

@@ -1,14 +1,21 @@
 from fastapi import FastAPI, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
-import pymysql, os
+import pymysql, os, json, uuid, io
+import httpx
 from typing import Optional, Literal
 
 # ==================== env & CORS ====================
 load_dotenv(encoding='utf-8-sig')
 allowed = os.getenv("ALLOW_ORIGINS", "http://localhost:5173, http://127.0.0.1:5173")
 allow_list = [o.strip() for o in allowed.split(",") if o.strip()]
+
+OPENWEBUI_BASE_URL = os.getenv("OPENWEBUI_BASE_URL", "http://172.16.188.175:3000")
+OPENWEBUI_API_KEY  = os.getenv("OPENWEBUI_API_KEY", "")
+OPENWEBUI_MODEL    = os.getenv("OPENWEBUI_MODEL", "nttdata-taiwan---ai-advisor")
+OPENWEBUI_KB_ID    = os.getenv("OPENWEBUI_KB_ID", "311af74a-1911-484f-8b47-b13eaabd89a9")
 
 app = FastAPI()
 app.add_middleware(
@@ -252,8 +259,8 @@ def _parse_rfc_read_table(result: dict, delimiter: str = "|") -> dict:
         rows.append(dict(zip(columns, parts)))
     return {"columns": columns, "rows": rows, "raw": {"FIELDS": fields, "DATA": data}}
 
-@app.get("/api/users/{userid}/sap-read")
-def sap_read(userid: str, table: str, rows: int = 100, fields: Optional[str] = None):
+def _rfc_read_table(userid: str, table: str, field_names: Optional[list] = None, rows: int = 100) -> dict:
+    """內部共用：呼叫 RFC_READ_TABLE，回傳 {columns, rows, raw}（供 sap-read 與資安掃描共用）。"""
     try:
         from pyrfc import Connection, ABAPApplicationError, ABAPRuntimeError, CommunicationError, LogonError
     except Exception as e:
@@ -266,13 +273,7 @@ def sap_read(userid: str, table: str, rows: int = 100, fields: Optional[str] = N
         raise HTTPException(502, f"SAP 連線失敗：{e}")
 
     try:
-        sel_fields = []
-        if fields:
-            for name in fields.split(","):
-                name = name.strip().upper()
-                if name:
-                    sel_fields.append({"FIELDNAME": name})
-
+        sel_fields = [{"FIELDNAME": n.strip().upper()} for n in (field_names or []) if n.strip()]
         result = conn.call(
             "RFC_READ_TABLE",
             QUERY_TABLE=table.upper(),
@@ -288,7 +289,12 @@ def sap_read(userid: str, table: str, rows: int = 100, fields: Optional[str] = N
         try: conn.close()
         except: pass
 
-    parsed = _parse_rfc_read_table(result, delimiter="|")
+    return _parse_rfc_read_table(result, delimiter="|")
+
+@app.get("/api/users/{userid}/sap-read")
+def sap_read(userid: str, table: str, rows: int = 100, fields: Optional[str] = None):
+    field_names = fields.split(",") if fields else []
+    parsed = _rfc_read_table(userid, table, field_names, rows)
     return {"table": table.upper(), "rowcount": len(parsed["rows"]), **parsed}
 
 @app.get("/api/users/{userid}/sap-ping")
@@ -307,6 +313,202 @@ def sap_ping(userid: str):
         return {"ok": True, "attrs": attrs}
     except Exception as e:
         raise HTTPException(502, f"SAP 連線失敗：{e}")
+
+# ==================== 資安漏洞檢測（RFC 讀取 + LLM 分析） ====================
+# 流程：RFC 讀 PRDVERS/CVERS → 寫入 ZPRDVERS/ZCVERS（同一 batch_id）→ 呼叫 Open WebUI（挂載
+# SAP Base Knowledge，透過 files 參數強制檢索，不依賴使用者手動輸入 #）→ 存 security_scans → 回傳結構化結果。
+# 使用者全程只看到 AI Advisor 自己的畫面，不會接觸到 Open WebUI 的對話介面。
+
+PRDVERS_FIELDS = ["ID", "NAME", "VERSION", "VENDOR", "DESCRIPT", "INSTSTATUS", "MOD_DATE", "MOD_TIME"]
+CVERS_FIELDS   = ["COMPONENT", "RELEASE", "EXTRELEASE", "COMP_TYPE"]
+
+SECURITY_SCAN_SYSTEM_PROMPT = """你是 SAP Basis 資安顧問。根據使用者提供的 SAP 系統版本資訊
+（產品版本 PRDVERS、軟體元件版本 CVERS），判斷是否有已知的資安疑慮
+（例如版本過舊、已停止維護、已知需要修補的元件等）。
+請務必只輸出一個 JSON 物件，不要有其他文字、不要用 markdown code block 包起來，格式如下：
+{"summary": "一到兩句話的整體摘要", "findings": [{"severity": "high|medium|low", "title": "簡短標題", "detail": "說明與建議"}]}
+如果沒有發現任何疑慮，findings 請回傳空陣列，summary 說明目前版本狀況正常。"""
+
+def _sap_date(s: Optional[str]):
+    s = (s or "").strip()
+    if len(s) == 8 and s.isdigit() and s != "00000000":
+        return f"{s[0:4]}-{s[4:6]}-{s[6:8]}"
+    return None
+
+def _sap_time(s: Optional[str]):
+    s = (s or "").strip()
+    if len(s) == 6 and s.isdigit():
+        return f"{s[0:2]}:{s[2:4]}:{s[4:6]}"
+    return None
+
+def _insert_prdvers_batch(cur, owner_user_id: int, batch_id: str, rows: list):
+    sql = """
+      INSERT INTO ZPRDVERS
+        (owner_user_id, batch_id, BORM_ID, BORM_NAME, BORM_VERS, BORM_VEND, BORM_NAME1, INSTSTATE, MOD_DATE, MOD_TIME)
+      VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """
+    for r in rows:
+        cur.execute(sql, (
+            owner_user_id, batch_id,
+            r.get("ID") or "", r.get("NAME") or "", r.get("VERSION") or "", r.get("VENDOR") or "",
+            r.get("DESCRIPT") or "", (r.get("INSTSTATUS") or "")[:1] or None,
+            _sap_date(r.get("MOD_DATE")), _sap_time(r.get("MOD_TIME")),
+        ))
+
+def _insert_cvers_batch(cur, owner_user_id: int, batch_id: str, rows: list):
+    sql = """
+      INSERT INTO ZCVERS
+        (owner_user_id, batch_id, COMPONENT, `RELEASE`, EXTRELEASE, COMP_TYPE)
+      VALUES (%s,%s,%s,%s,%s,%s)
+    """
+    for r in rows:
+        cur.execute(sql, (
+            owner_user_id, batch_id,
+            r.get("COMPONENT") or "", r.get("RELEASE") or "", r.get("EXTRELEASE") or "",
+            (r.get("COMP_TYPE") or "")[:1] or None,
+        ))
+
+def _call_openwebui_security_analysis(prdvers_rows: list, cvers_rows: list) -> dict:
+    if not OPENWEBUI_API_KEY:
+        raise HTTPException(500, "OPENWEBUI_API_KEY 未設定")
+
+    lines = ["=== PRDVERS（產品版本） ==="]
+    for r in prdvers_rows:
+        lines.append(f"ID={r.get('ID')} NAME={r.get('NAME')} VERSION={r.get('VERSION')} "
+                      f"VENDOR={r.get('VENDOR')} DESCRIPT={r.get('DESCRIPT')}")
+    lines.append("=== CVERS（軟體元件版本） ===")
+    for r in cvers_rows:
+        lines.append(f"COMPONENT={r.get('COMPONENT')} RELEASE={r.get('RELEASE')} EXTRELEASE={r.get('EXTRELEASE')}")
+    user_content = "\n".join(lines)
+
+    payload = {
+        "model": OPENWEBUI_MODEL,
+        "messages": [
+            {"role": "system", "content": SECURITY_SCAN_SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+        "files": [{"type": "collection", "id": OPENWEBUI_KB_ID}],
+    }
+    try:
+        r = httpx.post(
+            f"{OPENWEBUI_BASE_URL}/api/chat/completions",
+            json=payload,
+            headers={"Authorization": f"Bearer {OPENWEBUI_API_KEY}"},
+            timeout=90,
+        )
+        r.raise_for_status()
+    except httpx.HTTPError as e:
+        raise HTTPException(502, f"呼叫 AI 服務失敗：{e}")
+
+    data = r.json()
+    try:
+        content = data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError):
+        raise HTTPException(502, "AI 回應格式異常")
+
+    text = content.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+    try:
+        parsed = json.loads(text)
+        summary = parsed.get("summary", "")
+        findings = parsed.get("findings", [])
+    except Exception:
+        # AI 沒有照格式回答時，退化成把整段文字當摘要，避免整個功能直接失敗
+        summary = content
+        findings = []
+
+    return {"summary": summary, "findings": findings}
+
+@app.post("/api/users/{userid}/security-scan")
+def run_security_scan(userid: str):
+    prdvers_rows = _rfc_read_table(userid, "PRDVERS", PRDVERS_FIELDS, 500)["rows"]
+    cvers_rows   = _rfc_read_table(userid, "CVERS",   CVERS_FIELDS,   500)["rows"]
+
+    analysis = _call_openwebui_security_analysis(prdvers_rows, cvers_rows)
+
+    batch_id = str(uuid.uuid4())
+    source_snapshot = json.dumps({"PRDVERS": prdvers_rows, "CVERS": cvers_rows}, ensure_ascii=False)
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT id FROM USRINFO WHERE userid=%s LIMIT 1", (userid,))
+        u = cur.fetchone()
+        if not u:
+            raise HTTPException(404, "user not found")
+        owner_user_id = u["id"]
+
+        try:
+            conn.begin()
+            _insert_prdvers_batch(cur, owner_user_id, batch_id, prdvers_rows)
+            _insert_cvers_batch(cur, owner_user_id, batch_id, cvers_rows)
+            cur.execute("""
+                INSERT INTO security_scans (user_id, batch_id, summary, findings, source_snapshot, model_used)
+                VALUES (%s,%s,%s,%s,%s,%s)
+            """, (
+                owner_user_id, batch_id, analysis["summary"],
+                json.dumps(analysis["findings"], ensure_ascii=False),
+                source_snapshot, OPENWEBUI_MODEL
+            ))
+            scan_id = cur.lastrowid
+            conn.commit()
+        except:
+            conn.rollback()
+            raise
+
+    return {
+        "scan_id": scan_id,
+        "batch_id": batch_id,
+        "summary": analysis["summary"],
+        "findings": analysis["findings"],
+    }
+
+@app.get("/api/users/{userid}/security-scan/{scan_id}")
+def get_security_scan(userid: str, scan_id: int):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT s.id, s.batch_id, s.summary, s.findings, s.model_used, s.created_at
+              FROM security_scans s
+              JOIN USRINFO u ON u.id = s.user_id
+             WHERE s.id=%s AND u.userid=%s LIMIT 1
+        """, (scan_id, userid))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "scan not found")
+        row["findings"] = json.loads(row["findings"]) if row["findings"] else []
+        return row
+
+@app.get("/api/users/{userid}/security-scan/{scan_id}/export")
+def export_security_scan(userid: str, scan_id: int):
+    from docx import Document
+
+    scan = get_security_scan(userid, scan_id)
+
+    doc = Document()
+    doc.add_heading("SAP 資安漏洞檢測報告", level=1)
+    doc.add_paragraph(f"帳號：{userid}")
+    doc.add_paragraph(f"檢測時間：{scan['created_at']}")
+    doc.add_heading("摘要", level=2)
+    doc.add_paragraph(scan["summary"] or "")
+    doc.add_heading("發現項目", level=2)
+    sev_map = {"high": "高風險", "medium": "中風險", "low": "低風險"}
+    if not scan["findings"]:
+        doc.add_paragraph("未發現需留意的項目。")
+    for f in scan["findings"]:
+        p = doc.add_paragraph()
+        p.add_run(f"[{sev_map.get(f.get('severity'), f.get('severity',''))}] {f.get('title','')}").bold = True
+        doc.add_paragraph(f.get("detail", ""))
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    filename = f"security_scan_{userid}_{scan_id}.docx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 # ==================== Points APIs（統一到 /api/users/{userid}/points...） ====================
 # 說明：
