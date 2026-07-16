@@ -5,35 +5,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import homeIcon from '../assets/Icon_Home.png'
 import nttLogo from '../assets/GlobalLogo_NTTDATA_White.png'
-
-// === 全域離開提醒（路由守衛 + beforeunload）===
-// 貼在 <script setup lang="ts"> 區塊的最後面；不影響原有功能。
-// 說明：任何時候離開此頁（換路由、上一頁、重新整理、關頁），都會跳出確認。
-
-import { ref as __ref, onMounted as __onMounted, onBeforeUnmount as __onBeforeUnmount } from 'vue'
-import { onBeforeRouteLeave as __onBeforeRouteLeave } from 'vue-router'
-
-// 可動態開關（預設啟用全域提醒）。若某段流程想暫時關閉：__confirmOnLeave.value = false
-const __confirmOnLeave = __ref(true)
-
-const __LEAVE_MESSAGE = '離開此頁可能導致操作中斷或資料未保存。確定要離開嗎？'
-
-// SPA 重新整理 / 關頁 提醒（瀏覽器原生提示，文字不可自訂）
-function __beforeUnload(e: BeforeUnloadEvent) {
-  if (!__confirmOnLeave.value) return
-  e.preventDefault()
-  e.returnValue = '' // 設置任意字串可觸發提示（實際顯示內容由瀏覽器決定）
-}
-__onMounted(() => window.addEventListener('beforeunload', __beforeUnload))
-__onBeforeUnmount(() => window.removeEventListener('beforeunload', __beforeUnload))
-
-// 路由切換（包含按「上一頁」、跳其他頁）提示
-__onBeforeRouteLeave((_to, _from, next) => {
-  if (!__confirmOnLeave.value) return next()
-  const ok = window.confirm(__LEAVE_MESSAGE)
-  if (!ok) return next(false)
-  next()
-})
+import { useLeaveConfirm } from '../composables/useLeaveConfirm'
 
 type Mode = 'create' | 'update' | 'delete' | 'test'
 const router = useRouter()
@@ -139,6 +111,19 @@ function buildUpdatePayload(){
   }
   return diff
 }
+
+/** 只在「真的有東西會不見」時才警告離開：新增模式有填欄位、或修改模式有實際異動 */
+function hasUnsavedChanges(): boolean {
+  if (mode.value === 'create') {
+    return Object.values(form.value).some(v => normStr(v) !== '')
+  }
+  if (mode.value === 'update' && loadedUser.value) {
+    const diff = buildUpdatePayload()
+    return !!diff && Object.keys(diff).length > 0
+  }
+  return false
+}
+useLeaveConfirm(hasUnsavedChanges)
 
 async function onCreate(){
   if (!form.value.userid || !form.value.password){

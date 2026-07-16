@@ -60,7 +60,7 @@ const displayBalance = computed(() => balance.value ?? props.user?.points_balanc
       <span v-if="featureBillingState.running" title="功能計時中">
       ｜⏱ {{ formattedTime }}（每分扣 {{ featureBillingState.perMinute }} 點）｜
       </span>
-      <span v-if="balance" class="points">點數餘額：{{ displayBalance }}</span>
+      <span v-if="balance !== null" class="points">點數餘額：{{ displayBalance }}</span>
       <span class="user">{{ props.user?.userid }}（{{ props.user?.role }}）</span>
       <button class="logout" @click="logout">登出</button>
     </div>

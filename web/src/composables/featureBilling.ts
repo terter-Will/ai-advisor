@@ -1,5 +1,6 @@
 // src/composables/featureBilling.ts
 import { reactive, computed, onBeforeUnmount } from 'vue'
+import { openInsufficientPointsModal } from './pointsGate'
 
 const DEFAULT_PER_MINUTE = 1
 
@@ -67,6 +68,10 @@ export function startBilling(opts: StartOptions) {
         // 後端會更新餘額並回傳最新 points_balance（或用上面的 /points 再查一次）。:contentReference[oaicite:2]{index=2}
         if (resp.ok) {
           await _refreshAndBroadcastBalance() // ← 扣點成功後即時刷新餘額並廣播
+        } else if (resp.status === 402) {
+          // 點數不足：不要繼續空轉重試，直接停止計時並提示使用者
+          stopBilling()
+          openInsufficientPointsModal()
         }
       } catch (e) {
         console.warn('auto debit failed', e)

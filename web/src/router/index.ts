@@ -1,5 +1,6 @@
 // src/router/index.ts
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { hasEnoughPoints, openInsufficientPointsModal } from '../composables/pointsGate'
 // 懶載頁面（避免編譯期找不到檔名路徑時的 TS 錯誤）
 const Login         = () => import('../pages/Login.vue')
 const UserHome      = () => import('../pages/User.vue')
@@ -32,16 +33,16 @@ const routes: RouteRecordRaw[] = [
 
   //使用者子頁
   { path: '/user/security-scan', name: 'SecurityScan', component: SecurityScan,
-    meta: { requiresAuth: true, roles: ['user'] } },
+    meta: { requiresAuth: true, roles: ['user'], requiresPoints: true } },
 
   { path: '/user/performance', name: 'Performance', component: Performance,
-    meta: { requiresAuth: true, roles: ['user'] } },
+    meta: { requiresAuth: true, roles: ['user'], requiresPoints: true } },
 
   { path: '/user/abap-test', name: 'ABAPTesting', component: ABAPTesting,
-    meta: { requiresAuth: true, roles: ['user'] } },
-    
+    meta: { requiresAuth: true, roles: ['user'], requiresPoints: true } },
+
   { path: '/user/purchase-predict', name: 'PurchasePredict', component: PurchasePredict,
-    meta: { requiresAuth: true, roles: ['user'] } },
+    meta: { requiresAuth: true, roles: ['user'], requiresPoints: true } },
 
   // Admin 首頁
   { path: '/admin', name: 'AdminHome', component: AdminHome,
@@ -64,7 +65,9 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
 })
 
-router.beforeEach((to) => {
+const API_BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000')
+
+router.beforeEach(async (to) => {
   const u = getCurrentUser()
   if (to.meta.public) return true
 
@@ -86,6 +89,16 @@ router.beforeEach((to) => {
       return my === 'admin' ? { name: 'AdminHome' } : { name: 'UserHome' }
     }
   }
+
+  // 需要點數才能進入的功能頁
+  if (to.meta.requiresPoints && u?.userid) {
+    const ok = await hasEnoughPoints(u.userid, API_BASE)
+    if (!ok) {
+      openInsufficientPointsModal()
+      return false
+    }
+  }
+
   return true
 })
 

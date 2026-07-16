@@ -23,9 +23,6 @@ const router = useRouter()
 const API_BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000')
 function backHome(){ router.replace('/user') }
 
-/** 功能頁：掛上全域離開提醒 */
-useLeaveConfirm()
-
 /** 進入頁面 → 開始計時（滿 60 秒扣 1 點）；離開/卸載 → 自動停止 */
 onMounted(() => {
   if (me?.userid) {
@@ -45,6 +42,9 @@ const summary = ref('')
 const findings = ref<Finding[]>([])
 const errorMsg  = ref('')
 const exporting = ref(false)
+
+/** 只在檢測進行中才警告離開——這時離開會讓已花費的 RFC/AI 成本白費且看不到結果 */
+useLeaveConfirm(() => status.value === 'scanning')
 
 const SEV_LABEL: Record<Severity, string> = { high: '高風險', medium: '中風險', low: '低風險' }
 
