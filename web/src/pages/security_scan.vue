@@ -10,6 +10,18 @@ import { useLeaveConfirm } from '../composables/useLeaveConfirm'
 type Severity = 'high' | 'medium' | 'low'
 type Finding = { severity: Severity; title: string; detail: string }
 type Status = 'idle' | 'scanning' | 'done' | 'error'
+type RawRow = Record<string, string>
+type RawData = { PRDVERS: RawRow[]; CVERS: RawRow[] }
+
+const PRDVERS_FIELDS = ['ID', 'NAME', 'VERSION', 'VENDOR', 'DESCRIPT', 'INSTSTATUS', 'MOD_DATE', 'MOD_TIME'] as const
+const PRDVERS_HEADERS: Record<string, string> = {
+  ID: '系統ID', NAME: 'SAP 產品名稱', VERSION: 'SAP 版本 1', VENDOR: 'SAP 版本 2',
+  DESCRIPT: 'SAP PATCH 名稱', INSTSTATUS: '安裝狀態碼', MOD_DATE: '最後系統改日期', MOD_TIME: '最後系統改時',
+}
+const CVERS_FIELDS = ['COMPONENT', 'RELEASE', 'EXTRELEASE', 'COMP_TYPE'] as const
+const CVERS_HEADERS: Record<string, string> = {
+  COMPONENT: 'SAP 組件名稱', RELEASE: 'SAP 組件版次 1', EXTRELEASE: 'SAP 組件版次 2', COMP_TYPE: '組件類別',
+}
 
 /** 統一取得目前登入者 */
 function getCurrentUser() {
@@ -42,6 +54,8 @@ const summary = ref('')
 const findings = ref<Finding[]>([])
 const errorMsg  = ref('')
 const exporting = ref(false)
+const rawData   = ref<RawData | null>(null)
+const showRaw   = ref(false)
 
 /** 只在檢測進行中才警告離開——這時離開會讓已花費的 RFC/AI 成本白費且看不到結果 */
 useLeaveConfirm(() => status.value === 'scanning')
@@ -59,6 +73,7 @@ async function startScan() {
     scanId.value = data.scan_id
     summary.value = data.summary || ''
     findings.value = Array.isArray(data.findings) ? data.findings : []
+    rawData.value = data.raw_data ?? null
     status.value = 'done'
   } catch (e: any) {
     errorMsg.value = e?.message || '檢測失敗，請稍後再試'
@@ -92,6 +107,8 @@ function resetScan() {
   summary.value = ''
   findings.value = []
   errorMsg.value = ''
+  rawData.value = null
+  showRaw.value = false
 }
 </script>
 
@@ -135,6 +152,41 @@ function resetScan() {
               <div class="f-title">{{ f.title }}</div>
               <div class="f-detail">{{ f.detail }}</div>
             </div>
+          </div>
+        </div>
+
+        <button v-if="rawData" class="raw-toggle" @click="showRaw = !showRaw">
+          <span>查看原始資料（PRDVERS {{ rawData.PRDVERS.length }} 筆・CVERS {{ rawData.CVERS.length }} 筆）</span>
+          <span class="chevron" :class="{ open: showRaw }">▾</span>
+        </button>
+
+        <div v-if="rawData && showRaw" class="raw-block">
+          <div class="raw-title">PRDVERS（產品版本）</div>
+          <div class="raw-scroll">
+            <table class="raw-table">
+              <thead>
+                <tr><th v-for="k in PRDVERS_FIELDS" :key="k">{{ PRDVERS_HEADERS[k] }}</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="(row, i) in rawData.PRDVERS" :key="i">
+                  <td v-for="k in PRDVERS_FIELDS" :key="k">{{ row[k] || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="raw-title" style="margin-top:14px;">CVERS（軟體元件版本）</div>
+          <div class="raw-scroll">
+            <table class="raw-table">
+              <thead>
+                <tr><th v-for="k in CVERS_FIELDS" :key="k">{{ CVERS_HEADERS[k] }}</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="(row, i) in rawData.CVERS" :key="i">
+                  <td v-for="k in CVERS_FIELDS" :key="k">{{ row[k] || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -213,4 +265,30 @@ function resetScan() {
 .f-detail{ font-size:13px; color:#cdd7ea; margin-top:2px; }
 
 .actions{ display:flex; gap:10px; margin-top:16px; }
+
+.raw-toggle{
+  width:100%; display:flex; align-items:center; justify-content:space-between;
+  background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.18);
+  border-radius:12px; padding:10px 14px; color:#8fb8e6; font-size:13px;
+  cursor:pointer; margin-top:16px;
+}
+.chevron{ transition: transform .15s ease; }
+.chevron.open{ transform: rotate(180deg); }
+
+.raw-block{ margin-top:12px; }
+.raw-title{ color:#9fb0c0; font-size:12px; font-weight:600; margin:0 2px 6px; }
+.raw-scroll{
+  overflow:auto; max-height:220px;
+  border:1px solid rgba(255,255,255,.12); border-radius:10px; background:rgba(255,255,255,.03);
+}
+.raw-table{ width:100%; min-width:480px; border-collapse:separate; border-spacing:0; font-size:12px; }
+.raw-table thead th{
+  position:sticky; top:0; background:rgba(5,10,29,.95);
+  text-align:left; padding:8px 10px; border-bottom:1px solid rgba(255,255,255,.18);
+  color:#cfe2ff; white-space:nowrap;
+}
+.raw-table tbody td{
+  padding:7px 10px; border-bottom:1px dashed rgba(255,255,255,.12); color:#e6eefc; white-space:nowrap;
+}
+.raw-table tbody tr:last-child td{ border-bottom:0; }
 </style>

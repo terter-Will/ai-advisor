@@ -462,13 +462,14 @@ def run_security_scan(userid: str):
         "batch_id": batch_id,
         "summary": analysis["summary"],
         "findings": analysis["findings"],
+        "raw_data": {"PRDVERS": prdvers_rows, "CVERS": cvers_rows},
     }
 
 @app.get("/api/users/{userid}/security-scan/{scan_id}")
 def get_security_scan(userid: str, scan_id: int):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute("""
-            SELECT s.id, s.batch_id, s.summary, s.findings, s.model_used, s.created_at
+            SELECT s.id, s.batch_id, s.summary, s.findings, s.source_snapshot, s.model_used, s.created_at
               FROM security_scans s
               JOIN USRINFO u ON u.id = s.user_id
              WHERE s.id=%s AND u.userid=%s LIMIT 1
@@ -477,6 +478,7 @@ def get_security_scan(userid: str, scan_id: int):
         if not row:
             raise HTTPException(404, "scan not found")
         row["findings"] = json.loads(row["findings"]) if row["findings"] else []
+        row["raw_data"] = json.loads(row.pop("source_snapshot")) if row.get("source_snapshot") else {"PRDVERS": [], "CVERS": []}
         return row
 
 @app.get("/api/users/{userid}/security-scan/{scan_id}/export")
