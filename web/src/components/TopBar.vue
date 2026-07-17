@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { User } from '../types/user';
-import { onMounted, onBeforeUnmount, ref, computed } from 'vue';
+import { onMounted, onBeforeUnmount, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { featureBillingState, formattedTime } from '../composables/featureBilling'
+import { pointsBalanceState, refreshPointsBalance } from '../composables/pointsBalance'
 
 const props = defineProps<{ user: User | null }>();
 const router = useRouter();
@@ -12,45 +13,30 @@ function logout() {
   router.replace('/login');
 }
 
-/** 內部持有的餘額，預設吃 props，再隨事件/輪詢更新 */
-const balance = ref<number | null>(props.user?.points_balance ?? null)
 const userid  = computed(() => props.user?.userid || null)
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
 
-async function refreshBalanceOnce() {
-  if (!userid.value) return
-  try {
-    const r = await fetch(`${API_BASE}/api/users/${encodeURIComponent(userid.value)}/points`)
-    if (!r.ok) return
-    const j = await r.json() // j.balance / j.points_balance 都可用 :contentReference[oaicite:3]{index=3}
-    balance.value = typeof j.balance === 'number' ? j.balance : (j.points_balance ?? balance.value)
-  } catch {}
-}
-
-function onPointsUpdated(e: CustomEvent) {
-  const j: any = e.detail || {}
-  if (typeof j.balance === 'number') balance.value = j.balance
-  else if (typeof j.points_balance === 'number') balance.value = j.points_balance
-}
+// 餘額是跨頁面共用的全域狀態（見 pointsBalance.ts）。
+// 只有在還沒查過「這個使用者」的餘額時才墊 props 的舊值，查過一次之後就不再被新頁面的初始值蓋掉。
+const balance = computed(() => {
+  if (pointsBalanceState.userid === userid.value) return pointsBalanceState.balance
+  return props.user?.points_balance ?? null
+})
 
 let _poll: number | null = null
 onMounted(() => {
-  // 事件訂閱：扣點成功後的即時更新
-  window.addEventListener('points:updated', onPointsUpdated as EventListener)
-
-  // 初次載入拉一次
-  refreshBalanceOnce()
-
-  // 輕量備援輪詢（每 60 秒拉一次，避免事件漏掉）
-  _poll = window.setInterval(refreshBalanceOnce, 60000)
+  if (userid.value) refreshPointsBalance(userid.value, API_BASE)
+  // 輕量備援輪詢（每 60 秒拉一次，避免扣點事件漏掉）
+  _poll = window.setInterval(() => {
+    if (userid.value) refreshPointsBalance(userid.value, API_BASE)
+  }, 60000)
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('points:updated', onPointsUpdated as EventListener)
   if (_poll) { clearInterval(_poll); _poll = null }
 })
 
-const displayBalance = computed(() => balance.value ?? props.user?.points_balance ?? 0)
+const displayBalance = computed(() => balance.value ?? 0)
 </script>
 
 <template>

@@ -1,6 +1,7 @@
 // src/composables/featureBilling.ts
 import { reactive, computed, onBeforeUnmount } from 'vue'
 import { openInsufficientPointsModal } from './pointsGate'
+import { refreshPointsBalance } from './pointsBalance'
 
 const DEFAULT_PER_MINUTE = 1
 
@@ -28,18 +29,6 @@ export const formattedTime = computed(() => {
   return `${mm}:${ss}`
 })
 
-/** 扣點後主動刷新餘額並廣播給整個 App（TopBar 會聽這個事件） */
-async function _refreshAndBroadcastBalance() {
-  try {
-    const r = await fetch(
-      `${featureBillingState.apiBase}/api/users/${encodeURIComponent(featureBillingState.userid)}/points`
-    )
-    if (!r.ok) return
-    const j = await r.json() // 內含 balance / updated_at / points_balance 等欄位 :contentReference[oaicite:1]{index=1}
-    window.dispatchEvent(new CustomEvent('points:updated', { detail: j }))
-  } catch {}
-}
-
 export function startBilling(opts: StartOptions) {
   if (featureBillingState.running) return
   featureBillingState.running  = true
@@ -65,9 +54,9 @@ export function startBilling(opts: StartOptions) {
             }),
           }
         )
-        // 後端會更新餘額並回傳最新 points_balance（或用上面的 /points 再查一次）。:contentReference[oaicite:2]{index=2}
         if (resp.ok) {
-          await _refreshAndBroadcastBalance() // ← 扣點成功後即時刷新餘額並廣播
+          // 扣點成功後即時刷新共用的全域餘額狀態，TopBar 不管掛在哪個頁面都會同步
+          await refreshPointsBalance(featureBillingState.userid, featureBillingState.apiBase)
         } else if (resp.status === 402) {
           // 點數不足：不要繼續空轉重試，直接停止計時並提示使用者
           stopBilling()
