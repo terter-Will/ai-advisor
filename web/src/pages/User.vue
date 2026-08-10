@@ -10,26 +10,16 @@ import performanceIcon from '../assets/Performance.png'// ← 圖3（系統效�
 import abapIcon from '../assets/ABAP_test.png'// ← 圖4（客製程式效能檢測）
 import ppIcon from '../assets/Icon_pp.png'
 import llmIcon from '../assets/Icon_llm.png'
-import { hasEnoughPoints, openInsufficientPointsModal } from '../composables/pointsGate'
 
 const router = useRouter()
 const me: User | null = JSON.parse(localStorage.getItem('aiadvisor_user') || 'null')
-const API_BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000')
 
 // 導頁
 function goSecurity()   { router.push('/user/security-scan') }
 function goPerformance() { router.push('/user/performance') }
 function goABAP() { router.push('/user/abap-test') }
 function goPP() { router.push('/user/purchase-predict') }
-
-// LLM 是外部連結（window.open），不會經過 router 守衛，這裡要自己檢查點數
-async function goLLM() {
-  if (me?.userid) {
-    const ok = await hasEnoughPoints(me.userid, API_BASE)
-    if (!ok) { openInsufficientPointsModal(); return }
-  }
-  window.open('http://172.16.188.175:3000/', '_blank')
-}
+function goLLM() { router.push('/user/llm-chat') }
 </script>
 
 <template>

@@ -512,6 +512,50 @@ def export_security_scan(userid: str, scan_id: int):
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
+# ==================== LLM Chat（內嵌對話框，串流轉發給 Open WebUI）====================
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant", "system"]
+    content: str
+
+class LLMChatRequest(BaseModel):
+    messages: list[ChatMessage]
+
+@app.post("/api/users/{userid}/llm-chat")
+async def llm_chat(userid: str, body: LLMChatRequest):
+    if not OPENWEBUI_API_KEY:
+        raise HTTPException(500, "OPENWEBUI_API_KEY 未設定")
+    if not body.messages:
+        raise HTTPException(400, "messages 不可為空")
+
+    payload = {
+        "model": OPENWEBUI_MODEL,
+        "messages": [m.dict() for m in body.messages],
+        "files": [{"type": "collection", "id": OPENWEBUI_KB_ID}],
+        "stream": True,
+    }
+
+    async def event_stream():
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=180.0)) as client:
+                async with client.stream(
+                    "POST",
+                    f"{OPENWEBUI_BASE_URL}/api/chat/completions",
+                    json=payload,
+                    headers={"Authorization": f"Bearer {OPENWEBUI_API_KEY}"},
+                ) as resp:
+                    if resp.status_code >= 400:
+                        err = await resp.aread()
+                        yield f"data: {json.dumps({'error': err.decode('utf-8', 'ignore')})}\n\n".encode("utf-8")
+                        return
+                    async for chunk in resp.aiter_bytes():
+                        if chunk:
+                            yield chunk
+        except httpx.HTTPError as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n".encode("utf-8")
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
 # ==================== Points APIs（統一到 /api/users/{userid}/points...） ====================
 # 說明：
 # - 正式路徑統一使用 /api/users/{userid}/points...

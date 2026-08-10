@@ -11,6 +11,7 @@ const SecurityScan  = () => import('../pages/security_scan.vue')
 const Performance   = () => import('../pages/performance.vue')
 const ABAPTesting   = () => import('../pages/abap_test.vue')
 const PurchasePredict   = () => import('../pages/purchase_predict.vue')
+const LlmChat        = () => import('../pages/llm_chat.vue')
 
 // 你專案裡 localStorage 放的是這個 key
 const LS_KEY = 'aiadvisor_user'
@@ -42,6 +43,9 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, roles: ['user'], requiresPoints: true } },
 
   { path: '/user/purchase-predict', name: 'PurchasePredict', component: PurchasePredict,
+    meta: { requiresAuth: true, roles: ['user'], requiresPoints: true } },
+
+  { path: '/user/llm-chat', name: 'LlmChat', component: LlmChat,
     meta: { requiresAuth: true, roles: ['user'], requiresPoints: true } },
 
   // Admin 首頁
