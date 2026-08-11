@@ -521,6 +521,8 @@ class ChatMessage(BaseModel):
 class LLMChatRequest(BaseModel):
     messages: list[ChatMessage]
 
+CHAT_SYSTEM_PROMPT = "請一律使用繁體中文（台灣用語與寫法）回答，絕對不要使用簡體中文字或大陸用語。"
+
 @app.post("/api/users/{userid}/llm-chat")
 async def llm_chat(userid: str, body: LLMChatRequest):
     if not OPENWEBUI_API_KEY:
@@ -530,7 +532,7 @@ async def llm_chat(userid: str, body: LLMChatRequest):
 
     payload = {
         "model": OPENWEBUI_MODEL,
-        "messages": [m.dict() for m in body.messages],
+        "messages": [{"role": "system", "content": CHAT_SYSTEM_PROMPT}] + [m.dict() for m in body.messages],
         "files": [{"type": "collection", "id": OPENWEBUI_KB_ID}],
         "stream": True,
     }
