@@ -21,6 +21,7 @@ async function submit() {
     const res = await fetch(`${API_BASE}/api/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ userid: username.value, password: password.value })
     })
     if (!res.ok) {

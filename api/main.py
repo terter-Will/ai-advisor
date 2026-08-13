@@ -3,9 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
-import pymysql, os, json, uuid, io
+import pymysql, os, json, uuid, io, hmac, hashlib, time
 import httpx
 from typing import Optional, Literal
+from fastapi import Request, Response
 
 # ==================== env & CORS ====================
 load_dotenv(encoding='utf-8-sig')
@@ -16,6 +17,10 @@ OPENWEBUI_BASE_URL = os.getenv("OPENWEBUI_BASE_URL", "http://172.16.188.175:3000
 OPENWEBUI_API_KEY  = os.getenv("OPENWEBUI_API_KEY", "")
 OPENWEBUI_MODEL    = os.getenv("OPENWEBUI_MODEL", "nttdata-taiwan---ai-advisor")
 OPENWEBUI_KB_ID    = os.getenv("OPENWEBUI_KB_ID", "311af74a-1911-484f-8b47-b13eaabd89a9")
+
+SSO_SECRET_KEY  = os.getenv("SSO_SECRET_KEY", "dev-only-insecure-secret-change-me")
+SSO_COOKIE_NAME = "aiadvisor_sso"
+SSO_TTL_SECONDS = 8 * 60 * 60  # 8 小時，跟一般上班時段對齊
 
 app = FastAPI()
 app.add_middleware(
@@ -92,8 +97,28 @@ def row_to_public(row: dict) -> dict:
     }
 
 # ==================== Auth ====================
+
+def _sign_sso_token(userid: str) -> str:
+    expiry = int(time.time()) + SSO_TTL_SECONDS
+    message = f"{userid}.{expiry}"
+    sig = hmac.new(SSO_SECRET_KEY.encode(), message.encode(), hashlib.sha256).hexdigest()
+    return f"{message}.{sig}"
+
+def _verify_sso_token(token: str) -> Optional[str]:
+    try:
+        userid, expiry, sig = token.rsplit(".", 2)
+    except ValueError:
+        return None
+    message = f"{userid}.{expiry}"
+    expected = hmac.new(SSO_SECRET_KEY.encode(), message.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig, expected):
+        return None
+    if int(expiry) < int(time.time()):
+        return None
+    return userid
+
 @app.post("/api/login")
-def login(payload: LoginIn):
+def login(payload: LoginIn, response: Response):
     sql = """
       SELECT id, userid, password, role, points_balance, is_active
       FROM USRINFO WHERE userid=%s LIMIT 1
@@ -107,12 +132,40 @@ def login(payload: LoginIn):
     if not row["is_active"]:
         raise HTTPException(status_code=403, detail="user disabled")
 
+    response.set_cookie(
+        key=SSO_COOKIE_NAME,
+        value=_sign_sso_token(row["userid"]),
+        max_age=SSO_TTL_SECONDS,
+        httponly=True,
+        samesite="lax",
+    )
+
     return {"user": {
         "id": row["id"],
         "userid": row["userid"],
         "role": row["role"],
         "points_balance": row["points_balance"],
     }}
+
+@app.get("/internal/owui-auth-check")
+def owui_auth_check(request: Request, response: Response):
+    """給 nginx auth_request 呼叫：驗證 AI Advisor 的 session cookie，
+    通過的話用 header 回傳對應的 Open WebUI 信任身份，nginx 再轉送給 Open WebUI。"""
+    token = request.cookies.get(SSO_COOKIE_NAME)
+    userid = _verify_sso_token(token) if token else None
+    if not userid:
+        raise HTTPException(401, "not authenticated")
+
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT userid, role, is_active FROM USRINFO WHERE userid=%s LIMIT 1", (userid,))
+        row = cur.fetchone()
+    if not row or not row["is_active"]:
+        raise HTTPException(401, "not authenticated")
+
+    response.headers["X-Webui-Email"] = f"{row['userid']}@aiadvisor.local"
+    response.headers["X-Webui-Name"] = row["userid"]
+    response.headers["X-Webui-Role"] = "admin" if row["role"] == "admin" else "user"
+    return {"ok": True}
 
 # ==================== Users CRUD ====================
 @app.get("/api/users")
@@ -512,7 +565,7 @@ def export_security_scan(userid: str, scan_id: int):
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
-# ==================== LLM Chat（內嵌對話框，串流轉發給 Open WebUI）====================
+# ==================== LLM Chat（內嵌對話框，代打 Open WebUI）====================
 
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant", "system"]
@@ -534,29 +587,29 @@ async def llm_chat(userid: str, body: LLMChatRequest):
         "model": OPENWEBUI_MODEL,
         "messages": [{"role": "system", "content": CHAT_SYSTEM_PROMPT}] + [m.dict() for m in body.messages],
         "files": [{"type": "collection", "id": OPENWEBUI_KB_ID}],
-        "stream": True,
+        # knowledge_source_list：讓模型主動、可多次搜尋整個知識庫（含子資料夾），
+        # 單純用 files 參數只會查到知識庫最上層直接掛的檔案，查不到子資料夾內容
+        "tool_ids": ["knowledge_source_list"],
     }
 
-    async def event_stream():
-        try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=180.0)) as client:
-                async with client.stream(
-                    "POST",
-                    f"{OPENWEBUI_BASE_URL}/api/chat/completions",
-                    json=payload,
-                    headers={"Authorization": f"Bearer {OPENWEBUI_API_KEY}"},
-                ) as resp:
-                    if resp.status_code >= 400:
-                        err = await resp.aread()
-                        yield f"data: {json.dumps({'error': err.decode('utf-8', 'ignore')})}\n\n".encode("utf-8")
-                        return
-                    async for chunk in resp.aiter_bytes():
-                        if chunk:
-                            yield chunk
-        except httpx.HTTPError as e:
-            yield f"data: {json.dumps({'error': str(e)})}\n\n".encode("utf-8")
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=180.0)) as client:
+            r = await client.post(
+                f"{OPENWEBUI_BASE_URL}/api/chat/completions",
+                json=payload,
+                headers={"Authorization": f"Bearer {OPENWEBUI_API_KEY}"},
+            )
+            r.raise_for_status()
+            data = r.json()
+    except httpx.HTTPError as e:
+        raise HTTPException(502, f"呼叫 AI 服務失敗：{e}")
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    try:
+        content = data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError):
+        raise HTTPException(502, "AI 回應格式異常")
+
+    return {"content": content}
 
 # ==================== Points APIs（統一到 /api/users/{userid}/points...） ====================
 # 說明：
